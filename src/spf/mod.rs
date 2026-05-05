@@ -213,18 +213,19 @@ impl SpfOutput {
 
     pub fn with_report(mut self, spf: &Spf) -> Self {
         match &spf.ra {
-            Some(ra) if is_within_pct(spf.rp) => {
-                if match self.result {
-                    SpfResult::Fail => (spf.rr & RR_FAIL) != 0,
-                    SpfResult::SoftFail => (spf.rr & RR_SOFTFAIL) != 0,
-                    SpfResult::Neutral | SpfResult::None => (spf.rr & RR_NEUTRAL_NONE) != 0,
-                    SpfResult::TempError | SpfResult::PermError => {
-                        (spf.rr & RR_TEMP_PERM_ERROR) != 0
-                    }
-                    SpfResult::Pass => false,
-                } {
-                    self.report = format!("{}@{}", String::from_utf8_lossy(ra), self.domain).into();
-                }
+            Some(ra)
+                if is_within_pct(spf.rp)
+                    && match self.result {
+                        SpfResult::Fail => (spf.rr & RR_FAIL) != 0,
+                        SpfResult::SoftFail => (spf.rr & RR_SOFTFAIL) != 0,
+                        SpfResult::Neutral | SpfResult::None => (spf.rr & RR_NEUTRAL_NONE) != 0,
+                        SpfResult::TempError | SpfResult::PermError => {
+                            (spf.rr & RR_TEMP_PERM_ERROR) != 0
+                        }
+                        SpfResult::Pass => false,
+                    } =>
+            {
+                self.report = format!("{}@{}", String::from_utf8_lossy(ra), self.domain).into();
             }
             _ => (),
         }

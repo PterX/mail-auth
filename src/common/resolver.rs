@@ -13,10 +13,16 @@ use crate::{
     spf::{Macro, Spf},
 };
 use hickory_resolver::{
-    Name, TokioResolver,
-    config::{ResolverConfig, ResolverOpts},
-    name_server::TokioConnectionProvider,
-    proto::{ProtoError, ProtoErrorKind},
+    TokioResolver,
+    config::{CLOUDFLARE, GOOGLE, QUAD9, ResolverConfig, ResolverOpts},
+    net::{
+        DnsError, NetError,
+        runtime::TokioRuntimeProvider,
+    },
+    proto::{
+        ProtoError,
+        rr::{Name, RData},
+    },
     system_conf::read_system_conf,
 };
 use std::{
@@ -32,36 +38,42 @@ pub struct DnsEntry<T> {
 }
 
 impl MessageAuthenticator {
-    pub fn new_cloudflare_tls() -> Result<Self, ProtoError> {
-        Self::new(ResolverConfig::cloudflare_tls(), ResolverOpts::default())
+    pub fn new_cloudflare_tls() -> Result<Self, NetError> {
+        Self::new(ResolverConfig::tls(&CLOUDFLARE), ResolverOpts::default())
     }
 
-    pub fn new_cloudflare() -> Result<Self, ProtoError> {
-        Self::new(ResolverConfig::cloudflare(), ResolverOpts::default())
+    pub fn new_cloudflare() -> Result<Self, NetError> {
+        Self::new(
+            ResolverConfig::udp_and_tcp(&CLOUDFLARE),
+            ResolverOpts::default(),
+        )
     }
 
-    pub fn new_google() -> Result<Self, ProtoError> {
-        Self::new(ResolverConfig::google(), ResolverOpts::default())
+    pub fn new_google() -> Result<Self, NetError> {
+        Self::new(
+            ResolverConfig::udp_and_tcp(&GOOGLE),
+            ResolverOpts::default(),
+        )
     }
 
-    pub fn new_quad9() -> Result<Self, ProtoError> {
-        Self::new(ResolverConfig::quad9(), ResolverOpts::default())
+    pub fn new_quad9() -> Result<Self, NetError> {
+        Self::new(ResolverConfig::udp_and_tcp(&QUAD9), ResolverOpts::default())
     }
 
-    pub fn new_quad9_tls() -> Result<Self, ProtoError> {
-        Self::new(ResolverConfig::quad9_tls(), ResolverOpts::default())
+    pub fn new_quad9_tls() -> Result<Self, NetError> {
+        Self::new(ResolverConfig::tls(&QUAD9), ResolverOpts::default())
     }
 
-    pub fn new_system_conf() -> Result<Self, ProtoError> {
+    pub fn new_system_conf() -> Result<Self, NetError> {
         let (config, options) = read_system_conf()?;
         Self::new(config, options)
     }
 
-    pub fn new(config: ResolverConfig, options: ResolverOpts) -> Result<Self, ProtoError> {
+    pub fn new(config: ResolverConfig, options: ResolverOpts) -> Result<Self, NetError> {
         Ok(MessageAuthenticator(
-            TokioResolver::builder_with_config(config, TokioConnectionProvider::default())
+            TokioResolver::builder_with_config(config, TokioRuntimeProvider::default())
                 .with_options(options)
-                .build(),
+                .build()?,
         ))
     }
 
@@ -75,11 +87,10 @@ impl MessageAuthenticator {
             .0
             .txt_lookup(Name::from_str_relaxed::<&str>(key.to_fqdn().as_ref())?)
             .await?
-            .as_lookup()
-            .record_iter()
+            .answers()
         {
-            if let Some(txt_data) = record.data().as_txt() {
-                for item in txt_data.txt_data() {
+            if let RData::TXT(txt) = &record.data {
+                for item in &txt.txt_data {
                     result.extend_from_slice(item);
                 }
             }
@@ -108,8 +119,11 @@ impl MessageAuthenticator {
             .txt_lookup(Name::from_str_relaxed::<&str>(key.as_ref())?)
             .await?;
         let mut result = Err(Error::InvalidRecordType);
-        let records = txt_lookup.as_lookup().record_iter().filter_map(|r| {
-            let txt_data = r.data().as_txt()?.txt_data();
+        let records = txt_lookup.answers().iter().filter_map(|r| {
+            let RData::TXT(txt) = &r.data else {
+                return None;
+            };
+            let txt_data = &txt.txt_data;
             match txt_data.len() {
                 1 => Some(Cow::from(txt_data[0].as_ref())),
                 0 => None,
@@ -158,12 +172,12 @@ impl MessageAuthenticator {
             .0
             .mx_lookup(Name::from_str_relaxed::<&str>(key.as_ref())?)
             .await?;
-        let mx_records = mx_lookup.as_lookup().records();
+        let mx_records = mx_lookup.answers();
         let mut records: Vec<(u16, Vec<Box<str>>)> = Vec::with_capacity(mx_records.len());
         for mx_record in mx_records {
-            if let Some(mx) = mx_record.data().as_mx() {
-                let preference = mx.preference();
-                let exchange = mx.exchange().to_lowercase().to_string().into_boxed_str();
+            if let RData::MX(mx) = &mx_record.data {
+                let preference = mx.preference;
+                let exchange = mx.exchange.to_lowercase().to_string().into_boxed_str();
 
                 if let Some(record) = records.iter_mut().find(|r| r.0 == preference) {
                     record.1.push(exchange);
@@ -173,7 +187,7 @@ impl MessageAuthenticator {
             }
         }
 
-        records.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+        records.sort_unstable_by_key(|a| a.0);
         let records: Arc<[MX]> = records
             .into_iter()
             .map(|(preference, exchanges)| MX {
@@ -219,9 +233,15 @@ impl MessageAuthenticator {
             .ipv4_lookup(Name::from_str_relaxed::<&str>(key)?)
             .await?;
         let ips: Arc<[Ipv4Addr]> = ipv4_lookup
-            .as_lookup()
-            .record_iter()
-            .filter_map(|r| r.data().as_a()?.0.into())
+            .answers()
+            .iter()
+            .filter_map(|r| {
+                if let RData::A(a) = &r.data {
+                    Some(a.0)
+                } else {
+                    None
+                }
+            })
             .collect::<Vec<Ipv4Addr>>()
             .into();
 
@@ -261,9 +281,15 @@ impl MessageAuthenticator {
             .ipv6_lookup(Name::from_str_relaxed::<&str>(key)?)
             .await?;
         let ips: Arc<[Ipv6Addr]> = ipv6_lookup
-            .as_lookup()
-            .record_iter()
-            .filter_map(|r| r.data().as_aaaa()?.0.into())
+            .answers()
+            .iter()
+            .filter_map(|r| {
+                if let RData::AAAA(aaaa) = &r.data {
+                    Some(aaaa.0)
+                } else {
+                    None
+                }
+            })
             .collect::<Vec<Ipv6Addr>>()
             .into();
 
@@ -335,12 +361,14 @@ impl MessageAuthenticator {
 
         let ptr_lookup = self.0.reverse_lookup(addr).await?;
         let ptr: Arc<[Box<str>]> = ptr_lookup
-            .as_lookup()
-            .record_iter()
+            .answers()
+            .iter()
             .filter_map(|r| {
-                let r = r.data().as_ptr()?;
-                if !r.is_empty() {
-                    r.to_lowercase().to_string().into_boxed_str().into()
+                let RData::PTR(ptr) = &r.data else {
+                    return None;
+                };
+                if !ptr.is_empty() {
+                    Some(ptr.to_lowercase().to_string().into_boxed_str())
                 } else {
                     None
                 }
@@ -395,26 +423,30 @@ impl MessageAuthenticator {
             .lookup_ip(Name::from_str_relaxed::<&str>(key.as_ref())?)
             .await
         {
-            Ok(result) => Ok(result.as_lookup().record_iter().any(|r| {
+            Ok(result) => Ok(result.as_lookup().answers().iter().any(|r| {
                 matches!(
-                    r.data().record_type(),
+                    &r.data.record_type(),
                     hickory_resolver::proto::rr::RecordType::A
                         | hickory_resolver::proto::rr::RecordType::AAAA
                 )
             })),
-            Err(err) => match err.kind() {
-                ProtoErrorKind::NoRecordsFound { .. } => Ok(false),
-                _ => Err(err.into()),
-            },
+            Err(err) if err.is_no_records_found() => Ok(false),
+            Err(err) => Err(err.into()),
         }
     }
 }
 
 impl From<ProtoError> for Error {
     fn from(err: ProtoError) -> Self {
-        match err.kind() {
-            ProtoErrorKind::NoRecordsFound(response_code) => {
-                Error::DnsRecordNotFound(response_code.response_code)
+        Error::DnsError(err.to_string())
+    }
+}
+
+impl From<NetError> for Error {
+    fn from(err: NetError) -> Self {
+        match &err {
+            NetError::Dns(DnsError::NoRecordsFound(no_records)) => {
+                Error::DnsRecordNotFound(no_records.response_code)
             }
             _ => Error::DnsError(err.to_string()),
         }

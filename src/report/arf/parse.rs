@@ -159,25 +159,23 @@ impl<'x> Feedback<'x> {
                         };
                     }
                 }
-                Some(b'F' | b'f') => {
-                    if key.eq_ignore_ascii_case(b"Feedback-Type") {
-                        f.feedback_type = if txt_value.eq_ignore_ascii_case("abuse") {
-                            FeedbackType::Abuse
-                        } else if txt_value.eq_ignore_ascii_case("auth-failure") {
-                            FeedbackType::AuthFailure
-                        } else if txt_value.eq_ignore_ascii_case("fraud") {
-                            FeedbackType::Fraud
-                        } else if txt_value.eq_ignore_ascii_case("not-spam") {
-                            FeedbackType::NotSpam
-                        } else if txt_value.eq_ignore_ascii_case("other") {
-                            FeedbackType::Other
-                        } else if txt_value.eq_ignore_ascii_case("virus") {
-                            FeedbackType::Virus
-                        } else {
-                            continue;
-                        };
-                        has_ft = true;
-                    }
+                Some(b'F' | b'f') if key.eq_ignore_ascii_case(b"Feedback-Type") => {
+                    f.feedback_type = if txt_value.eq_ignore_ascii_case("abuse") {
+                        FeedbackType::Abuse
+                    } else if txt_value.eq_ignore_ascii_case("auth-failure") {
+                        FeedbackType::AuthFailure
+                    } else if txt_value.eq_ignore_ascii_case("fraud") {
+                        FeedbackType::Fraud
+                    } else if txt_value.eq_ignore_ascii_case("not-spam") {
+                        FeedbackType::NotSpam
+                    } else if txt_value.eq_ignore_ascii_case("other") {
+                        FeedbackType::Other
+                    } else if txt_value.eq_ignore_ascii_case("virus") {
+                        FeedbackType::Virus
+                    } else {
+                        continue;
+                    };
+                    has_ft = true;
                 }
                 Some(b'I' | b'i') => {
                     if key.eq_ignore_ascii_case(b"Identity-Alignment") {
@@ -245,15 +243,11 @@ impl<'x> Feedback<'x> {
                         f.source_port = txt_value.parse().unwrap_or(0);
                     }
                 }
-                Some(b'U' | b'u') => {
-                    if key.eq_ignore_ascii_case(b"User-Agent") {
-                        f.user_agent = Some(txt_value.into());
-                    }
+                Some(b'U' | b'u') if key.eq_ignore_ascii_case(b"User-Agent") => {
+                    f.user_agent = Some(txt_value.into());
                 }
-                Some(b'V' | b'v') => {
-                    if key.eq_ignore_ascii_case(b"Version") {
-                        f.version = txt_value.parse().unwrap_or(0);
-                    }
+                Some(b'V' | b'v') if key.eq_ignore_ascii_case(b"Version") => {
+                    f.version = txt_value.parse().unwrap_or(0);
                 }
                 _ => (),
             }

@@ -263,19 +263,13 @@ impl TxtRecordParser for DomainKey {
                 K => {
                     if let Some(ch) = header.next_skip_whitespaces() {
                         match ch {
-                            b'r' | b'R' => {
-                                if header.match_bytes(b"sa") && header.seek_tag_end() {
-                                    key_type = VerifyingKeyType::Rsa;
-                                } else {
-                                    return Err(Error::UnsupportedKeyType);
-                                }
+                            b'r' | b'R' if header.match_bytes(b"sa") && header.seek_tag_end() => {
+                                key_type = VerifyingKeyType::Rsa;
                             }
-                            b'e' | b'E' => {
-                                if header.match_bytes(b"d25519") && header.seek_tag_end() {
-                                    key_type = VerifyingKeyType::Ed25519;
-                                } else {
-                                    return Err(Error::UnsupportedKeyType);
-                                }
+                            b'e' | b'E'
+                                if header.match_bytes(b"d25519") && header.seek_tag_end() =>
+                            {
+                                key_type = VerifyingKeyType::Ed25519;
                             }
                             b';' => (),
                             _ => {

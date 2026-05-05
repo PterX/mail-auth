@@ -1,3 +1,7 @@
+mail-auth 0.9.0
+================================
+- Bump `hickory-resolver` to 0.26.
+
 mail-auth 0.8.0
 ================================
 - Added `aws-lc-rs` backend.
