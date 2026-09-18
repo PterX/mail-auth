@@ -96,7 +96,7 @@ impl Report {
         .ok();
         if self.version != 0.0 {
             // RFC 9990 Section 3.1.1.2: the report format version MUST be 1.0
-            writeln!(&mut xml, "\t<version>{}</version>", self.version).ok();
+            writeln!(&mut xml, "\t<version>{:.1}</version>", self.version).ok();
         }
         self.report_metadata.to_xml(&mut xml);
         self.policy_published.to_xml(&mut xml);
@@ -285,7 +285,11 @@ impl AuthResult {
         for dkim in &self.dkim {
             dkim.to_xml(xml);
         }
-        for spf in &self.spf {
+        if let Some(spf) = self
+            .spf
+            .iter()
+            .find(|spf| spf.scope != SPFDomainScope::Helo)
+        {
             spf.to_xml(xml);
         }
         writeln!(xml, "\t\t</auth_results>").ok();
@@ -573,5 +577,55 @@ mod test {
         let parsed_report = Report::parse_rfc5322(message.as_bytes(), MAX_REPORT_SIZE).unwrap();
 
         assert_eq!(report, parsed_report);
+    }
+
+    #[test]
+    fn dmarc_report_generate_single_spf_result() {
+        let xml = Report::new()
+            .with_version(1.0)
+            .with_org_name("Initech Industries Incorporated")
+            .with_email("dmarc@initech.net")
+            .with_report_id("abc-123")
+            .with_date_range_begin(12345)
+            .with_date_range_end(12346)
+            .with_domain("example.org")
+            .with_p(Disposition::Reject)
+            .with_record(
+                Record::new()
+                    .with_source_ip("192.168.1.2".parse().unwrap())
+                    .with_count(1)
+                    .with_action_disposition(ActionDisposition::Reject)
+                    .with_dmarc_dkim_result(DmarcResult::Fail)
+                    .with_dmarc_spf_result(DmarcResult::Fail)
+                    .with_envelope_from("example.org")
+                    .with_header_from("example.org")
+                    .with_spf_auth_result(
+                        SPFAuthResult::new()
+                            .with_domain("mail.example.org")
+                            .with_scope(SPFDomainScope::Helo)
+                            .with_result(SpfResult::Pass),
+                    )
+                    .with_spf_auth_result(
+                        SPFAuthResult::new()
+                            .with_domain("example.org")
+                            .with_scope(SPFDomainScope::MailFrom)
+                            .with_result(SpfResult::Fail),
+                    ),
+            )
+            .to_xml();
+
+        assert_eq!(xml.matches("\t\t\t<spf>\n").count(), 1, "{xml}");
+        assert!(xml.contains("<version>1.0</version>"), "{xml}");
+        assert!(
+            xml.contains(concat!(
+                "\t\t\t<spf>\n",
+                "\t\t\t\t<domain>example.org</domain>\n",
+                "\t\t\t\t<scope>mfrom</scope>\n",
+                "\t\t\t\t<result>fail</result>\n",
+                "\t\t\t</spf>\n"
+            )),
+            "{xml}"
+        );
+        assert!(!xml.contains("mail.example.org"), "{xml}");
     }
 }

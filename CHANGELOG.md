@@ -1,3 +1,8 @@
+mail-auth 0.13.3
+================================
+- DMARC: Aggregate reports serialise at most one `spf` element per record, dropping `helo` scoped results, as RFC 9990 Appendix A caps `AuthResultType/spf` at `maxOccurs="1"` and Section 3.1.1.13 restricts it to the `MAIL FROM` identity with `mfrom` as the only valid scope.
+- DMARC: The aggregate report `version` element is written as `1.0` rather than `1`, per RFC 9990 Section 3.1.1.2.
+
 mail-auth 0.13.2
 ================================
 - SPF: `SpfParameters::verify` now checks the `MAIL FROM` identity whenever the `HELO` check does not return `fail`, instead of only when it returns `pass` (#61).
