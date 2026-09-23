@@ -278,12 +278,13 @@ pub(crate) fn parse_hashes(value: &str) -> Option<Vec<MessageHash>> {
 
 impl Flag {
     pub fn parse(value: &str) -> Flag {
-        hashify::tiny_map!(value.as_bytes(),
-            b"donotmodify" => Flag::DoNotModify,
-            b"donotexplode" => Flag::DoNotExplode,
-            b"feedback" => Flag::Feedback,
-            b"feedhere" => Flag::FeedHere,
-            b"exploded" => Flag::Exploded,
+        hashify::fnc_map!(value.as_bytes(),
+            b"donotmodify" => Some(Flag::DoNotModify),
+            b"donotexplode" => Some(Flag::DoNotExplode),
+            b"feedback" => Some(Flag::Feedback),
+            b"feedhere" => Some(Flag::FeedHere),
+            b"exploded" => Some(Flag::Exploded),
+            _ => None,
         )
         .unwrap_or_else(|| Flag::Unknown(value.to_string()))
     }

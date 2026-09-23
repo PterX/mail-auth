@@ -592,12 +592,13 @@ impl FromStr for PolicyOverride {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(hashify::tiny_map!(s.as_bytes(),
+        Ok(hashify::map!(s.as_bytes(), PolicyOverride,
             b"trusted_forwarder" => PolicyOverride::TrustedForwarder,
             b"mailing_list" => PolicyOverride::MailingList,
             b"local_policy" => PolicyOverride::LocalPolicy,
             b"policy_test_mode" => PolicyOverride::PolicyTestMode,
         )
+        .copied()
         .unwrap_or(PolicyOverride::Other))
     }
 }
@@ -606,10 +607,11 @@ impl FromStr for Discovery {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(hashify::tiny_map!(s.as_bytes(),
+        Ok(hashify::map!(s.as_bytes(), Discovery,
             b"psl" => Discovery::Psl,
             b"treewalk" => Discovery::Treewalk,
         )
+        .copied()
         .unwrap_or(Discovery::Unspecified))
     }
 }
@@ -618,10 +620,11 @@ impl FromStr for DmarcResult {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(hashify::tiny_map!(s.as_bytes(),
+        Ok(hashify::map!(s.as_bytes(), DmarcResult,
             b"pass" => DmarcResult::Pass,
             b"fail" => DmarcResult::Fail,
         )
+        .copied()
         .unwrap_or(DmarcResult::Unspecified))
     }
 }
@@ -630,7 +633,7 @@ impl FromStr for DkimResult {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(hashify::tiny_map!(s.as_bytes(),
+        Ok(hashify::map!(s.as_bytes(), DkimResult,
             b"none" => DkimResult::None,
             b"pass" => DkimResult::Pass,
             b"fail" => DkimResult::Fail,
@@ -639,6 +642,7 @@ impl FromStr for DkimResult {
             b"temperror" => DkimResult::TempError,
             b"permerror" => DkimResult::PermError,
         )
+        .copied()
         .unwrap_or(DkimResult::None))
     }
 }
@@ -647,7 +651,7 @@ impl FromStr for SpfResult {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(hashify::tiny_map!(s.as_bytes(),
+        Ok(hashify::map!(s.as_bytes(), SpfResult,
             b"none" => SpfResult::None,
             b"pass" => SpfResult::Pass,
             b"fail" => SpfResult::Fail,
@@ -656,6 +660,7 @@ impl FromStr for SpfResult {
             b"temperror" => SpfResult::TempError,
             b"permerror" => SpfResult::PermError,
         )
+        .copied()
         .unwrap_or(SpfResult::None))
     }
 }
@@ -664,10 +669,11 @@ impl FromStr for SPFDomainScope {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(hashify::tiny_map!(s.as_bytes(),
+        Ok(hashify::map!(s.as_bytes(), SPFDomainScope,
             b"helo" => SPFDomainScope::Helo,
             b"mfrom" => SPFDomainScope::MailFrom,
         )
+        .copied()
         .unwrap_or(SPFDomainScope::Unspecified))
     }
 }
@@ -676,12 +682,13 @@ impl FromStr for ActionDisposition {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(hashify::tiny_map!(s.as_bytes(),
+        Ok(hashify::map!(s.as_bytes(), ActionDisposition,
             b"none" => ActionDisposition::None,
             b"pass" => ActionDisposition::Pass,
             b"quarantine" => ActionDisposition::Quarantine,
             b"reject" => ActionDisposition::Reject,
         )
+        .copied()
         .unwrap_or(ActionDisposition::Unspecified))
     }
 }
@@ -690,11 +697,12 @@ impl FromStr for Disposition {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(hashify::tiny_map!(s.as_bytes(),
+        Ok(hashify::map!(s.as_bytes(), Disposition,
             b"none" => Disposition::None,
             b"quarantine" => Disposition::Quarantine,
             b"reject" => Disposition::Reject,
         )
+        .copied()
         .unwrap_or(Disposition::Unspecified))
     }
 }
@@ -745,13 +753,14 @@ impl<R: BufRead> ReaderHelper for Reader<R> {
                     }
                 }
                 Ok(Event::GeneralRef(e)) => {
-                    let v = hashify::tiny_map!(e.as_bytes(),
+                    let v = hashify::map!(e.as_bytes(), &'static str,
                         b"lt" => "<",
                         b"gt" => ">",
                         b"amp" => "&",
                         b"apos" => "'",
                         b"quot" => "\"",
                     )
+                    .copied()
                     .map(Cow::Borrowed)
                     .or_else(|| {
                         e.resolve_char_ref()

@@ -87,7 +87,7 @@ pub(crate) fn cmp_ignore_ascii_case(a: &[u8], b: &[u8]) -> Ordering {
 
 pub(super) fn is_non_signed_header(name: &[u8]) -> bool {
     let name = name.trim_ascii();
-    hashify::tiny_map_ignore_case!(name,
+    hashify::map_ignore_case!(name, bool,
         b"received" => true,
         b"return-path" => true,
         b"delivered-to" => true,
@@ -99,6 +99,7 @@ pub(super) fn is_non_signed_header(name: &[u8]) -> bool {
         b"arc-message-signature" => true,
         b"arc-seal" => true
     )
+    .copied()
     .unwrap_or_else(|| {
         matches!(name.get(1), Some(&b'-')) && matches!(name.first(), Some(&b'x' | &b'X'))
     })

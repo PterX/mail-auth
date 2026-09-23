@@ -295,11 +295,12 @@ pub(crate) const R_HASH_SHA256: u64 = 0x02;
 
 impl Algorithm {
     pub fn parse(name: &[u8]) -> Option<Self> {
-        hashify::tiny_map_ignore_case!(name,
+        hashify::map_ignore_case!(name, Algorithm,
             b"rsa-sha1" => Algorithm::RsaSha1,
             b"rsa-sha256" => Algorithm::RsaSha256,
             b"ed25519-sha256" => Algorithm::Ed25519Sha256,
         )
+        .copied()
     }
 
     pub fn name(&self) -> &'static str {
